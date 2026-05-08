@@ -4,7 +4,7 @@
 로컬 환경에서 동작하는 프라이버시 중심의 개인용 통합 알림 대시보드입니다.  
 iCal, IMAP, YouTube RSS, 치지직 라이브 감시 등을 하나의 화면에서 관리할 수 있습니다.
 
-![Dashboard Preview](docs/dashboard-preview.png)
+![Dashboard Preview](https://raw.githubusercontent.com/CHU3221/fastapi-smart-dashboard/main/docs/dashboard-preview.png)
 
 ---
 

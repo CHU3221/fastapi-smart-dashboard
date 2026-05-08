@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Smart Dashboard Controller",
+  "version": "1.0",
+  "description": "대시보드와 각 탭을 제어하는 리모컨",
+  "permissions": ["tabs", "scripting", "storage"], 
+  "host_permissions": [
+    "*://*/*" 
+  ],
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": ["*://*.discord.com/*", "*://*.youtube.com/*", "*://chzzk.naver.com/*", "*://*/*"],
+      "js": ["overlay.js"]
+    },
+    {
+      "matches": ["*://*.discord.com/*"],
+      "js": ["discord.js"]
+    }
+  ]
+}

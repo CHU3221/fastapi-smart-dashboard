@@ -95,7 +95,7 @@
             <div class="panel-hint">설정</div>
             <div class="weather-info">
                 <img id="w-icon" src="" alt="">
-                <div class="temp" id="w-temp">--°</div>
+                <div class="temp" id="w-temp">--℃</div>
                 <div style="line-height: 1.2;">
                     <div id="w-desc" style="font-size: 1.1rem;">날씨 로딩...</div>
                     <div style="font-size: 0.9rem; color: #aaa;" id="w-city">도시 이름</div>
@@ -426,7 +426,7 @@
                 const res = await fetch('/api/weather', fetchOptions);
                 const data = await res.json();
                 if(data.temp !== undefined) {
-                    document.getElementById('w-temp').innerText = data.temp + "°";
+                    document.getElementById('w-temp').innerText = data.temp + "℃";
                     document.getElementById('w-desc').innerText = data.description;
                     document.getElementById('w-city').innerText = data.city;
                     document.getElementById('w-icon').src = `http://openweathermap.org/img/wn/${data.icon}@2x.png`;

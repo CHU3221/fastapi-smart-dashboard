@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager, closing
 from pydantic import BaseModel
 from typing import Optional
+import sys
 import json
 import httpx
 import asyncio
@@ -22,11 +23,19 @@ import html
 import re
 import xml.etree.ElementTree as ET
 
+if getattr(sys, 'frozen', False):
+    BUNDLE_DIR = sys._MEIPASS
+    EXE_LOCATION = os.path.dirname(sys.executable)
+else:
+    BUNDLE_DIR = os.path.dirname(os.path.abspath(__file__))
+    EXE_LOCATION = BUNDLE_DIR
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "dashboard.db")
-CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
-STATIC_DIR = os.path.join(BASE_DIR, "static")
+STATIC_DIR = os.path.join(BUNDLE_DIR, "static")
+
+DB_PATH = os.path.join(EXE_LOCATION, "dashboard.db")
+CONFIG_PATH = os.path.join(EXE_LOCATION, "config.json")
+
+BASE_DIR = BUNDLE_DIR
 
 DEFAULT_CONFIG = {
     "clock": {"font": "Pretendard", "color": "#00ff88", "separator": "colon", "notation": "24h"},
@@ -341,3 +350,13 @@ async def receive_notification(data: WebhookData):
         c.execute("INSERT INTO notifications (source, message, border_color, bg_color) VALUES (?, ?, ?, ?)", (data.source, data.message, data.border_color, data.bg_color))
         conn.commit()
     return {"status": "success"}
+
+if __name__ == "__main__":
+    import uvicorn
+    print("=" * 50)
+    print("Smart Dashboard 로컬 서버가 가동되었습니다")
+    print("웹 브라우저를 열고 http://127.0.0.1:7600 으로 접속하세요.")
+    print("서버를 종료하려면 이 창을 닫아주세요.")
+    print("=" * 50)
+        
+    uvicorn.run(app, host="127.0.0.1", port=7600, log_level="warning")

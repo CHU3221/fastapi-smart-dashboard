@@ -1,0 +1,31 @@
+{
+    "clock": {
+        "font": "Pretendard",
+        "color": "#ffffff",
+        "separator": "colon",
+        "notation": "12h_en"
+    },
+    "weather": {
+        "city": "",
+        "font": "Pretendard",
+        "color": "#ffffff",
+        "api_key": ""
+    },
+    "notifications": {
+        "colors": {
+            "CHZZK": "#00ff88",
+            "GMAIL": "#ea4335",
+            "SYSTEM": "#aaaaaa",
+            "YOUTUBE": "#ff0000"
+        }
+    },
+    "gmail": {
+        "email": "",
+        "app_password": ""
+    },
+    "calendar": {
+        "ical_url": "",
+        "keywords": {
+        }
+    }
+}

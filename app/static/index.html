@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Dashboard v3.1</title>
+    <style>
+        :root {
+            --clock-color: #00ff88;
+            --clock-font: 'Pretendard', sans-serif;
+            --weather-color: #ffffff;
+            --chzzk-color: #00ff88;
+            --youtube-color: #ff0000;
+            --gmail-color: #ea4335;
+            --system-color: #aaaaaa;
+        }
+
+        body { background: #000; color: #fff; font-family: var(--clock-font); margin: 0; padding: 12px; height: 100vh; box-sizing: border-box; overflow: hidden; }
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1.5fr 8.5fr; gap: 12px; height: 100%; }
+        
+        .panel { background: #121212; border-radius: 18px; padding: 18px; border: 1px solid #2a2a2a; display: flex; flex-direction: column; overflow: hidden; transition: border 0.3s; position: relative; }
+        .panel:hover { border-color: #555; cursor: pointer; }
+        .panel-hint { position: absolute; top: 10px; right: 15px; font-size: 0.7rem; color: #444; opacity: 0; transition: opacity 0.3s; }
+        .panel:hover .panel-hint { opacity: 1; }
+
+        .top-left { justify-content: center; align-items: center; }
+        #clock { font-size: 3.8rem; font-weight: 800; color: var(--clock-color); line-height: 1; font-family: var(--clock-font); }
+        #date { font-size: 1.1rem; color: #888; margin-top: 5px; }
+
+        .weather-info { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; color: var(--weather-color); }
+        #w-icon { width: 80px; height: 80px; }
+        .temp { font-size: 3.2rem; font-weight: bold; }
+
+        .bottom-left { display: flex; flex-direction: column; }
+        .panel-title { font-size: 1.1rem; color: #777; margin-bottom: 12px; font-weight: bold; display: flex; align-items: center; justify-content: space-between;}
+        
+        #notification-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; -ms-overflow-style: none; scrollbar-width: none; }
+        #notification-list::-webkit-scrollbar { display: none; }
+        
+        .noti-item { background: #1a1a1a; padding: 12px; border-radius: 10px; border-left: 4px solid #fff; animation: fadeIn 0.4s ease-out; }
+        .noti-item a { color: inherit; text-decoration: underline; font-weight: bold; cursor: pointer; }
+        .noti-item a:hover { color: #fff; }
+
+        .bottom-right { display: flex; flex-direction: column; }
+        .calendar-container { flex: 1; display: flex; flex-direction: column; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: auto repeat(6, 1fr); gap: 4px; flex: 1; }
+        .cal-day-header { font-size: 0.75rem; color: #444; text-align: center; padding-bottom: 2px; font-weight: bold; }
+        .cal-date { background: #181818; border-radius: 6px; padding: 4px; display: flex; flex-direction: column; font-size: 0.85rem; border: 1px solid #222; overflow: hidden; }
+        .cal-date.today { border: 1px solid var(--clock-color); background: #12251d; }
+        .cal-date.next-month { background: #0a0a0a; border-color: #111; color: #555; }
+        .cal-date.next-month .event-tag { opacity: 0.25; filter: saturate(0.4) grayscale(0.2); }
+        .date-num { font-weight: bold; margin-bottom: 2px; }
+        .event-tag { font-size: 0.68rem; color: #fff; padding: 1px 4px; border-radius: 3px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
+        .modal { background: #1e1e1e; padding: 25px; border-radius: 15px; width: 380px; border: 1px solid #333; max-height: 80vh; overflow-y: auto; transition: width 0.3s ease; display: flex; flex-direction: column; }
+        .modal h2 { margin-top: 0; font-size: 1.3rem; color: #fff; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+        
+        .split-modal-body { display: flex; height: 350px; margin: 0 -25px -25px -25px; border-top: 1px solid #333; }
+        .settings-sidebar { width: 120px; border-right: 1px solid #333; background: #151515; padding: 10px 0; border-bottom-left-radius: 15px; }
+        .sidebar-tab { padding: 12px 20px; cursor: pointer; color: #777; font-size: 0.95rem; border-left: 3px solid transparent; transition: all 0.2s; }
+        .sidebar-tab:hover { color: #ccc; background: #1a1a1a; }
+        .sidebar-tab.active { color: #fff; border-left-color: var(--clock-color); background: #222; font-weight: bold; }
+        .settings-detail { flex: 1; padding: 20px; overflow-y: auto; background: #1e1e1e; border-bottom-right-radius: 15px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s ease-out; }
+
+        .setting-group { margin-bottom: 15px; }
+        .setting-group label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 5px; }
+        .setting-group input, .setting-group select { width: 100%; background: #111; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 5px; box-sizing: border-box; }
+        
+        /* 색상 선택기 전용 CSS 복구 */
+        .setting-group input[type="color"] { padding: 0; height: 40px; cursor: pointer; background: transparent; border: none; }
+        .setting-group input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        .setting-group input[type="color"]::-webkit-color-swatch { border: 1px solid #444; border-radius: 5px; }
+
+        .modal-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .btn { padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-cancel { background: #333; color: #fff; }
+        .btn-save { background: var(--clock-color); color: #000; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <audio id="alert-sound" src="/static/alert.mp3" preload="auto"></audio>
+
+    <div class="dashboard-grid">
+        <div class="panel top-left" onclick="openModal('clock')">
+            <div class="panel-hint">설정</div>
+            <div id="clock">00:00:00</div>
+            <div id="date"></div>
+        </div>
+
+        <div class="panel top-right" onclick="openModal('weather')">
+            <div class="panel-hint">설정</div>
+            <div class="weather-info">
+                <img id="w-icon" src="" alt="">
+                <div class="temp" id="w-temp">--°</div>
+                <div style="line-height: 1.2;">
+                    <div id="w-desc" style="font-size: 1.1rem;">날씨 로딩...</div>
+                    <div style="font-size: 0.9rem; color: #aaa;" id="w-city">도시 이름</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel bottom-left" onclick="openModal('notifications')">
+            <div class="panel-hint">설정</div>
+            <div class="panel-title">실시간 알림</div>
+            <div id="notification-list"></div>
+        </div>
+
+        <div class="panel bottom-right" onclick="openModal('calendar')">
+            <div class="panel-hint">설정</div>
+            <div class="panel-title" id="cal-title">달력 로딩 중...</div>
+            <div class="calendar-container">
+                <div id="calendar-content" class="calendar-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal" id="modal-container">
+            <h2 id="modal-title">설정</h2>
+            <div id="modal-body"></div>
+            <div class="modal-btns" id="modal-btns-container">
+                <button class="btn btn-cancel" onclick="closeModal()">취소 / 닫기</button>
+                <button class="btn btn-save" id="save-btn" onclick="saveSettings()">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CAL_COLORS = {
+            '1': '#7986cb', '2': '#33b679', '3': '#8e24aa', '4': '#e67c73', '5': '#f6bf26',
+            '6': '#f4511e', '7': '#039be5', '8': '#616161', '9': '#3f51b5', '10': '#0b8043', '11': '#d50000'
+        };
+        const CAL_COLOR_NAMES = {
+            '1': '연파랑', '2': '초록', '3': '보라', '4': '연빨강', '5': '노랑',
+            '6': '주황', '7': '파랑', '8': '회색', '9': '진파랑', '10': '진초록', '11': '빨강'
+        };
+
+        let currentConfig = {};
+        let latestNotiTime = null; 
+        let currentNotiRaw = ""; 
+
+        const fetchOptions = { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } };
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/config', fetchOptions);
+                currentConfig = await res.json();
+                if(currentConfig.notifications && !currentConfig.notifications.colors.SYSTEM) currentConfig.notifications.colors.SYSTEM = "#aaaaaa";
+                if(currentConfig.notifications && !currentConfig.notifications.colors.YOUTUBE) currentConfig.notifications.colors.YOUTUBE = "#ff0000";
+                applyConfigStyles();
+                fetchWeather(); 
+            } catch (e) {}
+        }
+
+        function applyConfigStyles() {
+            const root = document.documentElement;
+            if(currentConfig.clock) root.style.setProperty('--clock-color', currentConfig.clock.color);
+            if(currentConfig.weather) root.style.setProperty('--weather-color', currentConfig.weather.color);
+            if(currentConfig.notifications) {
+                root.style.setProperty('--chzzk-color', currentConfig.notifications.colors.CHZZK);
+                root.style.setProperty('--youtube-color', currentConfig.notifications.colors.YOUTUBE);
+                root.style.setProperty('--gmail-color', currentConfig.notifications.colors.GMAIL);
+                root.style.setProperty('--system-color', currentConfig.notifications.colors.SYSTEM);
+            }
+        }
+
+        let currentEditingPanel = '';
+
+        function switchNotiTab(tabName) {
+            document.querySelectorAll('.sidebar-tab').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById('btn-tab-' + tabName).classList.add('active');
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+
+        function openModal(panel) {
+            currentEditingPanel = panel;
+            const title = document.getElementById('modal-title');
+            const body = document.getElementById('modal-body');
+            const modalContainer = document.getElementById('modal-container');
+            const btnsContainer = document.getElementById('modal-btns-container');
+            
+            document.getElementById('save-btn').style.display = 'block';
+            modalContainer.style.width = '380px'; 
+            btnsContainer.style.marginTop = '20px';
+            
+            if (panel === 'clock') {
+                title.innerText = "시계 설정";
+                const separator = currentConfig.clock.separator || 'colon';
+                const notation = currentConfig.clock.notation || '24h';
+                body.innerHTML = `
+                    <div class="setting-group"><label>테마 색상</label><input type="color" id="input-clock-color" value="${currentConfig.clock.color}"></div>
+                    <div class="setting-group">
+                        <label>시간 구분 표시</label>
+                        <select id="input-clock-separator">
+                            <option value="colon" ${separator === 'colon' ? 'selected' : ''}>콜론 (14:30:15)</option>
+                            <option value="korean" ${separator === 'korean' ? 'selected' : ''}>한글 (14시 30분 15초)</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label>시간 표기법</label>
+                        <select id="input-clock-notation">
+                            <option value="24h" ${notation === '24h' ? 'selected' : ''}>24시간제 (14:30)</option>
+                            <option value="12h_ko" ${notation === '12h_ko' ? 'selected' : ''}>12시간제 (오후 2:30)</option>
+                            <option value="12h_en" ${notation === '12h_en' ? 'selected' : ''}>12시간제 (PM 2:30)</option>
+                        </select>
+                    </div>
+                `;
+            } else if (panel === 'weather') {
+                title.innerText = "날씨 및 서비스 설정";
+                body.innerHTML = `
+                    <div class="setting-group"><label>OpenWeatherMap API 키</label><input type="password" id="input-weather-key" value="${currentConfig.weather.api_key || ''}" placeholder="API 키를 입력하세요"></div>
+                    <div class="setting-group"><label>도시 (영문, 예: Seoul, Pohang)</label><input type="text" id="input-weather-city" value="${currentConfig.weather.city}"></div>
+                `;
+            } else if (panel === 'notifications') {
+                title.innerText = "실시간 알림 통합 설정";
+                modalContainer.style.width = '550px'; 
+                btnsContainer.style.marginTop = '15px';
+                
+                body.innerHTML = `
+                    <div class="split-modal-body">
+                        <div class="settings-sidebar">
+                            <div class="sidebar-tab active" id="btn-tab-chzzk" onclick="switchNotiTab('chzzk')">치지직</div>
+                            <div class="sidebar-tab" id="btn-tab-youtube" onclick="switchNotiTab('youtube')">유튜브</div>
+                            <div class="sidebar-tab" id="btn-tab-gmail" onclick="switchNotiTab('gmail')">이메일</div>
+                            <div class="sidebar-tab" id="btn-tab-system" onclick="switchNotiTab('system')">시스템</div>
+                        </div>
+                        <div class="settings-detail">
+                            <div id="tab-chzzk" class="tab-content active">
+                                <div class="setting-group"><label>테마 색상</label><input type="color" id="input-color-chzzk" value="${currentConfig.notifications.colors.CHZZK}"></div>
+                                <div style="background:#111; padding:10px; border-radius:8px; margin-bottom:15px;">
+                                    <label style="font-size:0.85rem; color:#aaa; margin-bottom:5px;">새 치지직 채널 추가</label>
+                                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                                        <input type="text" id="input-streamer-name" placeholder="표시할 이름" style="flex:1;">
+                                        <input type="text" id="input-streamer-id" placeholder="채널 ID (32자리)" style="flex:2;">
+                                    </div>
+                                    <button onclick="addStreamer('CHZZK')" style="width:100%; padding:8px; background:#00ff88; color:black; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">추가하기</button>
+                                </div>
+                                <label style="font-size:0.85rem; color:#aaa; margin-bottom:5px; display:block;">현재 감시 목록</label>
+                                <div id="streamer-list-chzzk" style="max-height:100px; overflow-y:auto; border:1px solid #333; padding:5px; border-radius:5px;">로딩 중...</div>
+                            </div>
+                            
+                            <div id="tab-youtube" class="tab-content">
+                                <div class="setting-group"><label>테마 색상</label><input type="color" id="input-color-youtube" value="${currentConfig.notifications.colors.YOUTUBE}"></div>
+                                <div style="background:#111; padding:10px; border-radius:8px; margin-bottom:15px;">
+                                    <label style="font-size:0.85rem; color:#aaa; margin-bottom:5px;">새 유튜브 채널 추가</label>
+                                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                                        <input type="text" id="input-yt-name" placeholder="표시할 이름" style="flex:1;">
+                                        <input type="text" id="input-yt-handle" placeholder="채널명 (@핸들 주소)" style="flex:2;">
+                                    </div>
+                                    <button onclick="addStreamer('YOUTUBE')" style="width:100%; padding:8px; background:#ff0000; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">추가하기</button>
+                                </div>
+                                <label style="font-size:0.85rem; color:#aaa; margin-bottom:5px; display:block;">현재 구독 목록</label>
+                                <div id="streamer-list-youtube" style="max-height:100px; overflow-y:auto; border:1px solid #333; padding:5px; border-radius:5px;">로딩 중...</div>
+                            </div>
+
+                            <div id="tab-gmail" class="tab-content">
+                                <div class="setting-group"><label>테마 색상</label><input type="color" id="input-color-gmail" value="${currentConfig.notifications.colors.GMAIL}"></div>
+                                <div class="setting-group"><label>구글 계정</label><input type="text" id="input-gmail-email" value="${currentConfig.gmail.email || ''}" placeholder="example@gmail.com"></div>
+                                <div class="setting-group"><label>앱 비밀번호</label><input type="password" id="input-gmail-pw" value="${currentConfig.gmail.app_password || ''}"></div>
+                            </div>
+
+                            <div id="tab-system" class="tab-content">
+                                <div class="setting-group"><label>기본 테마 색상</label><input type="color" id="input-color-system" value="${currentConfig.notifications.colors.SYSTEM}"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                loadStreamers();
+            } else if (panel === 'calendar') {
+                title.innerText = "달력 & 키워드 색상 설정";
+                if(!currentConfig.calendar.keywords) currentConfig.calendar.keywords = {};
+                body.innerHTML = `
+                    <div class="setting-group"><label>iCal 비공개 주소</label><input type="text" id="input-ical-url" value="${currentConfig.calendar.ical_url || ''}"></div>
+                    <div style="background:#111; padding:10px; border-radius:8px; margin-bottom:15px;">
+                        <label style="font-size:0.85rem; color:#aaa; margin-bottom:5px; display:block;">새 키워드 추가</label>
+                        <div style="display:flex; gap:5px; margin-bottom:10px;">
+                            <input type="text" id="input-kw" placeholder="키워드 입력" style="flex:1;">
+                            <select id="input-kw-color" style="flex:1; background:#222; color:#fff; border:1px solid #444; border-radius:5px;">
+                                ${Object.keys(CAL_COLORS).map(k => `<option value="${k}">${CAL_COLOR_NAMES[k]} (${k})</option>`).join('')}
+                            </select>
+                        </div>
+                        <button onclick="addCalKeyword()" style="width:100%; padding:8px; background:var(--clock-color); border:none; color:black; font-weight:bold; border-radius:5px; cursor:pointer;">추가하기</button>
+                    </div>
+                    <label style="font-size:0.85rem; color:#aaa; margin-bottom:5px; display:block;">현재 키워드 규칙</label>
+                    <div id="kw-list" style="margin-bottom:15px; max-height:150px; overflow-y:auto; border:1px solid #333; padding:5px; border-radius:5px;">로딩 중...</div>
+                `;
+                renderCalKeywords();
+            }
+            document.getElementById('settings-modal').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('settings-modal').style.display = 'none'; }
+
+        async function saveSettings() {
+            if (currentEditingPanel === 'clock') {
+                currentConfig.clock.color = document.getElementById('input-clock-color').value;
+                currentConfig.clock.separator = document.getElementById('input-clock-separator').value;
+                currentConfig.clock.notation = document.getElementById('input-clock-notation').value;
+                updateClock();
+            }
+            if (currentEditingPanel === 'weather') {
+                currentConfig.weather.api_key = document.getElementById('input-weather-key').value;
+                currentConfig.weather.city = document.getElementById('input-weather-city').value;
+            }
+            if (currentEditingPanel === 'calendar') {
+                currentConfig.calendar.ical_url = document.getElementById('input-ical-url').value;
+            }
+            if (currentEditingPanel === 'notifications') {
+                currentConfig.notifications.colors.CHZZK = document.getElementById('input-color-chzzk').value;
+                currentConfig.notifications.colors.YOUTUBE = document.getElementById('input-color-youtube').value;
+                currentConfig.notifications.colors.GMAIL = document.getElementById('input-color-gmail').value;
+                currentConfig.notifications.colors.SYSTEM = document.getElementById('input-color-system').value;
+                
+                currentConfig.gmail.email = document.getElementById('input-gmail-email').value;
+                currentConfig.gmail.app_password = document.getElementById('input-gmail-pw').value;
+            }
+            
+            await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentConfig) });
+            applyConfigStyles();
+            if(currentEditingPanel === 'weather') fetchWeather();
+            if(currentEditingPanel === 'calendar') fetchCalendar();
+            closeModal();
+        }
+
+        function renderCalKeywords() {
+            const kws = currentConfig.calendar.keywords || {};
+            const list = document.getElementById('kw-list');
+            const keys = Object.keys(kws);
+            if(keys.length === 0) { list.innerHTML = '<div style="color:#555; font-size:0.8rem; text-align:center; padding:10px;">등록된 규칙이 없습니다.</div>'; return; }
+            list.innerHTML = keys.map(kw => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a1a; padding:5px 8px; margin-bottom:4px; border-radius:4px; font-size:0.85rem;">
+                    <span style="display:flex; align-items:center; gap:8px;"><div style="width:12px; height:12px; border-radius:50%; background:${CAL_COLORS[kws[kw]]}"></div>${kw}</span>
+                    <button onclick="deleteCalKeyword('${kw}')" style="background:#ff4444; border:none; color:white; border-radius:3px; cursor:pointer; font-size:0.7rem; padding:3px 6px;">삭제</button>
+                </div>`).join('');
+        }
+
+        async function addCalKeyword() {
+            const kw = document.getElementById('input-kw').value.trim();
+            const color = document.getElementById('input-kw-color').value;
+            if(!kw) return;
+            currentConfig.calendar.keywords[kw] = color;
+            await fetch('/api/config', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(currentConfig) });
+            document.getElementById('input-kw').value = '';
+            renderCalKeywords(); fetchCalendar(); 
+        }
+        async function deleteCalKeyword(kw) {
+            delete currentConfig.calendar.keywords[kw];
+            await fetch('/api/config', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(currentConfig) });
+            renderCalKeywords(); fetchCalendar(); 
+        }
+
+        async function loadStreamers() {
+            const res = await fetch('/api/channels', fetchOptions);
+            const channels = await res.json();
+            
+            const renderItem = ch => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a1a; padding:5px 8px; margin-bottom:4px; border-radius:4px; font-size:0.85rem;">
+                    <span>${ch.name}</span>
+                    <button onclick="deleteStreamer('${ch.channel_id}')" style="background:#ff4444; border:none; color:white; border-radius:3px; cursor:pointer; font-size:0.7rem; padding:3px 6px;">삭제</button>
+                </div>`;
+
+            const chzzkList = channels.filter(c => c.platform === 'CHZZK');
+            const ytList = channels.filter(c => c.platform === 'YOUTUBE');
+
+            const clist = document.getElementById('streamer-list-chzzk');
+            if(clist) clist.innerHTML = chzzkList.length ? chzzkList.map(renderItem).join('') : '<div style="color:#555; text-align:center;">목록이 없습니다.</div>';
+            
+            const ylist = document.getElementById('streamer-list-youtube');
+            if(ylist) ylist.innerHTML = ytList.length ? ytList.map(renderItem).join('') : '<div style="color:#555; text-align:center;">목록이 없습니다.</div>';
+        }
+
+
+        async function addStreamer(platform) {
+            const nameId = platform === 'CHZZK' ? 'input-streamer-name' : 'input-yt-name';
+            const urlId = platform === 'CHZZK' ? 'input-streamer-id' : 'input-yt-handle';
+            
+            const name = document.getElementById(nameId).value;
+            const channel_id = document.getElementById(urlId).value;
+            if(!name || !channel_id) return;
+            
+            const res = await fetch('/api/channels', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({channel_id, name, platform}) });
+            const data = await res.json();
+            
+            if(data.status === 'error') {
+                alert("채널 추가 실패: " + data.message);
+                return;
+            }
+            
+            document.getElementById(nameId).value = '';
+            document.getElementById(urlId).value = '';
+            loadStreamers();
+        }
+
+        async function deleteStreamer(id) {
+            await fetch('/api/channels/'+id, { method: 'DELETE' });
+            loadStreamers();
+        }
+
+        function updateClock() {
+            const now = new Date();
+            let h = now.getHours();
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            const notation = currentConfig.clock?.notation || '24h';
+            const separator = currentConfig.clock?.separator || 'colon';
+            let ampm = '';
+            if (notation !== '24h') {
+                const isPM = h >= 12;
+                if (notation === '12h_en') ampm = isPM ? 'PM ' : 'AM ';
+                if (notation === '12h_ko') ampm = isPM ? '오후 ' : '오전 ';
+                h = h % 12; if (h === 0) h = 12;
+            }
+            h = String(h).padStart(2, '0');
+            let timeString = (separator === 'korean') ? `${ampm}${h}시 ${m}분 ${s}초` : `${ampm}${h}:${m}:${s}`;
+            document.getElementById('clock').innerText = timeString;
+            document.getElementById('date').innerText = now.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'short'});
+        }
+
+        async function fetchWeather() {
+            try {
+                const res = await fetch('/api/weather', fetchOptions);
+                const data = await res.json();
+                if(data.temp !== undefined) {
+                    document.getElementById('w-temp').innerText = data.temp + "°";
+                    document.getElementById('w-desc').innerText = data.description;
+                    document.getElementById('w-city').innerText = data.city;
+                    document.getElementById('w-icon').src = `http://openweathermap.org/img/wn/${data.icon}@2x.png`;
+                }
+            } catch (e) {}
+        }
+
+        async function fetchNotifications() {
+            try {
+                const res = await fetch('/api/notifications', fetchOptions);
+                const data = await res.json();
+                const rawData = JSON.stringify(data);
+                if (currentNotiRaw === rawData) return; 
+                currentNotiRaw = rawData;
+
+                const list = document.getElementById('notification-list');
+                if (data.length > 0 && latestNotiTime !== data[0].timestamp) {
+                    if (latestNotiTime !== null) { 
+                        document.getElementById('alert-sound').play().catch(e => {});
+                        list.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                    latestNotiTime = data[0].timestamp;
+                }
+
+                list.innerHTML = data.map(noti => {
+                    let cardBgColor = noti.bg_color || '#1a1a1a'; 
+                    let bColor = noti.border_color || 'var(--system-color)'; 
+
+                    if (!noti.border_color) {
+                        if(noti.source === 'CHZZK') bColor = 'var(--chzzk-color)';
+                        if(noti.source === 'YOUTUBE') bColor = 'var(--youtube-color)';
+                        if(noti.source === 'GMAIL') bColor = 'var(--gmail-color)';
+                    }
+                    return `
+                        <div class="noti-item" style="background-color: ${cardBgColor}; border-left-color: ${bColor}">
+                            <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#888; margin-bottom:4px;">
+                                <span style="font-weight:bold; color:${bColor}">[${noti.source}]</span>
+                                <span>${new Date(noti.timestamp + "Z").toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'})}</span>
+                            </div>
+                            <div style="font-size:0.95rem; line-height:1.4;">${noti.message}</div>
+                        </div>`;
+                }).join('');
+            } catch (e) {}
+        }
+
+        async function fetchCalendar() {
+            try {
+                const res = await fetch('/api/calendar', fetchOptions);
+                const data = await res.json();
+                const container = document.getElementById('calendar-content');
+                document.getElementById('cal-title').innerText = `${data.current_year}년 ${data.current_month}월`;
+                
+                const firstDay = new Date(data.current_year, data.current_month-1, 1).getDay();
+                const lastDate = new Date(data.current_year, data.current_month, 0).getDate();
+                
+                let html = '';
+                ['일','월','화','수','목','금','토'].forEach(d => html += `<div class="cal-day-header">${d}</div>`);
+                for(let i=0; i<firstDay; i++) html += '<div></div>';
+                
+                for(let d=1; d<=lastDate; d++) {
+                    const today = new Date();
+                    const isToday = today.getDate() === d && (today.getMonth()+1) === data.current_month && today.getFullYear() === data.current_year;
+                    const dayEvents = data.events.filter(ev => new Date(ev.start.dateTime || ev.start.date).getDate() === d);
+                    
+                    let eventHtml = dayEvents.slice(0, 3).map(ev => {
+                        const bgColor = CAL_COLORS[ev.colorId] || '#4285F4'; 
+                        return `<div class="event-tag" style="background-color: ${bgColor};">${ev.summary}</div>`;
+                    }).join('');
+                    if(dayEvents.length > 3) eventHtml += `<div style="font-size:0.6rem; color:#555; text-align:center;">+${dayEvents.length-3}</div>`;
+                    html += `<div class="cal-date ${isToday?'today':''}"><div class="date-num">${d}</div>${eventHtml}</div>`;
+                }
+
+                const totalCellsUsed = firstDay + lastDate;
+                const remainingCells = 42 - totalCellsUsed;
+                let nextMonth = data.current_month + 1;
+                let nextYear = data.current_year;
+                if (nextMonth > 12) { nextMonth = 1; nextYear++; }
+
+                for(let i=1; i<=remainingCells; i++) {
+                    const dayEvents = data.events.filter(ev => {
+                        const evDate = new Date(ev.start.dateTime || ev.start.date);
+                        return evDate.getDate() === i && (evDate.getMonth() + 1) === nextMonth && evDate.getFullYear() === nextYear;
+                    });
+                    let eventHtml = dayEvents.slice(0, 3).map(ev => {
+                        const bgColor = CAL_COLORS[ev.colorId] || '#4285F4'; 
+                        return `<div class="event-tag" style="background-color: ${bgColor};">${ev.summary}</div>`;
+                    }).join('');
+                    if(dayEvents.length > 3) eventHtml += `<div style="font-size:0.6rem; color:#555; text-align:center;">+${dayEvents.length-3}</div>`;
+                    html += `<div class="cal-date next-month"><div class="date-num">${i}</div>${eventHtml}</div>`;
+                }
+                container.innerHTML = html;
+            } catch (e) {}
+        }
+        
+        loadConfig().then(() => {
+            updateClock();
+            fetchNotifications();
+            fetchCalendar();
+            
+            setInterval(updateClock, 1000);
+            setInterval(fetchWeather, 600000);
+            setInterval(fetchNotifications, 5000);
+            setInterval(fetchCalendar, 600000); 
+        });
+    </script>
+</body>
+</html>

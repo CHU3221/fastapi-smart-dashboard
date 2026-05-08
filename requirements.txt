@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+httpx
+pydantic
+icalendar
+recurring_ical_events

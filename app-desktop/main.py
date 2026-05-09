@@ -237,10 +237,16 @@ async def add_channel_api(data: dict):
         async with httpx.AsyncClient() as client:
             try:
                 res = await client.get(url, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-                match = re.search(r'"channelId":"(UC[\w-]{22})"', res.text)
-                if not match: match = re.search(r'<meta itemprop="identifier" content="(UC[\w-]{22})">', res.text)
-                if match: channel_id = match.group(1)
-                else: return {"status": "error", "message": "채널 ID를 찾을 수 없습니다. 주소나 핸들을 확인해주세요."}
+                
+                match = re.search(r'title="RSS" href=".*?channel_id=(UC[\w-]+)"', res.text)
+                
+                if not match: 
+                    match = re.search(r'<meta itemprop="identifier" content="(UC[\w-]+)">', res.text)
+                
+                if match: 
+                    channel_id = match.group(1)
+                else: 
+                    return {"status": "error", "message": "채널 ID를 찾을 수 없습니다. 주소나 핸들을 확인해주세요."}
             except:
                 return {"status": "error", "message": "유튜브 서버에 접근할 수 없습니다."}
 

@@ -23,7 +23,7 @@
         .panel:hover .panel-hint { opacity: 1; }
 
         .top-left { justify-content: center; align-items: center; }
-        #clock { font-size: 3.8rem; font-weight: 800; color: var(--clock-color); line-height: 1; font-family: var(--clock-font); }
+        #clock { font-size: 3.8rem; font-weight: 800; color: var(--clock-color); line-height: 1; font-family: var(--clock-font); font-variant-numeric: tabular-nums; }
         #date { font-size: 1.1rem; color: #888; margin-top: 5px; }
 
         .weather-info { display: flex; align-items: center; justify-content: center; gap: 10px; height: 100%; color: var(--weather-color); }
@@ -192,6 +192,7 @@
                 title.innerText = "시계 설정";
                 const separator = currentConfig.clock.separator || 'colon';
                 const notation = currentConfig.clock.notation || '24h';
+                const ampmPos = currentConfig.clock.ampm_position || 'before';
                 body.innerHTML = `
                     <div class="setting-group"><label>테마 색상</label><input type="color" id="input-clock-color" value="${currentConfig.clock.color}"></div>
                     <div class="setting-group">
@@ -207,6 +208,13 @@
                             <option value="24h" ${notation === '24h' ? 'selected' : ''}>24시간제 (14:30)</option>
                             <option value="12h_ko" ${notation === '12h_ko' ? 'selected' : ''}>12시간제 (오후 2:30)</option>
                             <option value="12h_en" ${notation === '12h_en' ? 'selected' : ''}>12시간제 (PM 2:30)</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label>AM/PM 위치 (12시간제)</label>
+                        <select id="input-clock-ampm-pos">
+                            <option value="before" ${ampmPos === 'before' ? 'selected' : ''}>시간 앞 (예: 오전 2:30)</option>
+                            <option value="after" ${ampmPos === 'after' ? 'selected' : ''}>시간 뒤 (예: 2:30 오전)</option>
                         </select>
                     </div>
                 `;
@@ -301,6 +309,7 @@
                 currentConfig.clock.color = document.getElementById('input-clock-color').value;
                 currentConfig.clock.separator = document.getElementById('input-clock-separator').value;
                 currentConfig.clock.notation = document.getElementById('input-clock-notation').value;
+                currentConfig.clock.ampm_position = document.getElementById('input-clock-ampm-pos').value;
                 updateClock();
             }
             if (currentEditingPanel === 'weather') {
@@ -402,36 +411,59 @@
         }
 
         function updateClock() {
-            const now = new Date();
-            let h = now.getHours();
-            const m = String(now.getMinutes()).padStart(2, '0');
-            const s = String(now.getSeconds()).padStart(2, '0');
-            const notation = currentConfig.clock?.notation || '24h';
-            const separator = currentConfig.clock?.separator || 'colon';
-            let ampm = '';
-            if (notation !== '24h') {
-                const isPM = h >= 12;
-                if (notation === '12h_en') ampm = isPM ? 'PM ' : 'AM ';
-                if (notation === '12h_ko') ampm = isPM ? '오후 ' : '오전 ';
-                h = h % 12; if (h === 0) h = 12;
-            }
-            h = String(h).padStart(2, '0');
-            let timeString = (separator === 'korean') ? `${ampm}${h}시 ${m}분 ${s}초` : `${ampm}${h}:${m}:${s}`;
-            document.getElementById('clock').innerText = timeString;
-            document.getElementById('date').innerText = now.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'short'});
-        }
+    const now = new Date();
+    let h = now.getHours();
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    
+
+    const notation = currentConfig.clock?.notation || '24h';
+    const separator = currentConfig.clock?.separator || 'colon';
+    const ampmPos = currentConfig.clock?.ampm_position || 'before'; 
+    
+    let ampmHtml = '';
+
+    if (notation !== '24h') {
+        const isPM = h >= 12;
+        let ampmText = '';
+        if (notation === '12h_en') ampmText = isPM ? 'PM' : 'AM';
+        if (notation === '12h_ko') ampmText = isPM ? '오후' : '오전';
+        
+        ampmHtml = `<span style="font-size: 0.5em; vertical-align: baseline; margin: 0 4px;">${ampmText}</span>`;
+        
+        h = h % 12; 
+        if (h === 0) h = 12;
+    }
+
+    h = String(h).padStart(2, '0'); 
+
+    let baseTime = (separator === 'korean') ? `${h}시 ${m}분 ${s}초` : `${h}:${m}:${s}`;
+
+    let timeString = '';
+    if (notation !== '24h') {
+        timeString = (ampmPos === 'before') ? `${ampmHtml}${baseTime}` : `${baseTime}${ampmHtml}`;
+    } else {
+        timeString = baseTime;
+    }
+
+    document.getElementById('clock').innerHTML = timeString;
+    document.getElementById('date').innerText = now.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'short'});
+}
 
         async function fetchWeather() {
             try {
                 const res = await fetch('/api/weather', fetchOptions);
                 const data = await res.json();
                 if(data.temp !== undefined) {
-                    document.getElementById('w-temp').innerText = data.temp + "℃";
+
+                    document.getElementById('w-temp').innerHTML = `${data.temp}<span style="font-size: 0.6em; vertical-align: super; margin-left: 2px;">℃</span>`;
                     document.getElementById('w-desc').innerText = data.description;
                     document.getElementById('w-city').innerText = data.city;
                     document.getElementById('w-icon').src = `http://openweathermap.org/img/wn/${data.icon}@2x.png`;
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.log("날씨 로딩 실패", e);
+            }
         }
 
         async function fetchNotifications() {

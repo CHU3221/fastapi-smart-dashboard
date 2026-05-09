@@ -22,7 +22,6 @@ import html
 import re
 import xml.etree.ElementTree as ET
 
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "dashboard.db")
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
@@ -181,7 +180,6 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
-
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/api/config")
@@ -192,7 +190,6 @@ async def update_config_api(new_config: dict): save_config(new_config); return {
 
 @app.get("/")
 async def read_index(): 
-    
     return FileResponse(os.path.join(STATIC_DIR, 'index.html'))
 
 @app.get("/api/notifications")
@@ -208,7 +205,6 @@ async def get_channels():
         c = conn.cursor()
         c.execute("SELECT channel_id, name, platform FROM channels")
         return [{"channel_id": r[0], "name": r[1], "platform": r[2] or "CHZZK"} for r in c.fetchall()]
-
 
 @app.post("/api/channels")
 async def add_channel_api(data: dict):
@@ -228,20 +224,24 @@ async def add_channel_api(data: dict):
         async with httpx.AsyncClient() as client:
             try:
                 res = await client.get(url, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-                match = re.search(r'"channelId":"(UC[\w-]{22})"', res.text)
-                if not match: match = re.search(r'<meta itemprop="identifier" content="(UC[\w-]{22})">', res.text)
-                if match: channel_id = match.group(1)
-                else: return {"status": "error", "message": "채널 ID를 찾을 수 없습니다. 주소나 핸들을 확인해주세요."}
+                
+                match = re.search(r'title="RSS" href=".*?channel_id=(UC[\w-]+)"', res.text)
+                
+                if not match: 
+                    match = re.search(r'<meta itemprop="identifier" content="(UC[\w-]+)">', res.text)
+                
+                if match: 
+                    channel_id = match.group(1)
+                else: 
+                    return {"status": "error", "message": "채널 ID를 찾을 수 없습니다. 주소나 핸들을 확인해주세요."}
             except:
                 return {"status": "error", "message": "유튜브 서버에 접근할 수 없습니다."}
 
-    
     with closing(sqlite3.connect(DB_PATH)) as conn:
         c = conn.cursor()
         c.execute("INSERT OR REPLACE INTO channels (channel_id, name, platform) VALUES (?, ?, ?)", (channel_id, name, platform))
         conn.commit()
 
-    
     async def send_welcome_notification():
         try:
             msg = ""
@@ -291,7 +291,6 @@ async def delete_channel_api(channel_id: str):
         c.execute("DELETE FROM channels WHERE channel_id = ?", (channel_id,))
         conn.commit()
     return {"status": "success"}
-
 
 @app.get("/api/weather")
 async def get_weather():

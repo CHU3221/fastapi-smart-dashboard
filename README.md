@@ -288,9 +288,9 @@ curl -X POST http://[DASHBOARD_IP]:7600/api/notify \
 
 ## Known Issues
 
-### YouTube 채널 감시 이슈 (26.05.08 ~ )
+### YouTube 채널 감시 이슈 (26.05.08 ~ 26.05.10)
 
-YouTube 서버의 Bot 차단으로 감시 대상 채널의 새로운 동영상 업로드의 감지가 어려운 상황입니다.
+YouTube 서버의 Bot 차단으로 감시 대상 채널의 새로운 동영상 업로드의 감지가 어려운 상황입니다. (정상화 됨)
 
 ---
 

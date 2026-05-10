@@ -4,3 +4,4 @@ httpx
 pydantic
 icalendar
 recurring_ical_events
+holidays

@@ -1,6 +1,6 @@
 @echo off
 echo Installing required libraries
-pip install fastapi uvicorn httpx pydantic icalendar recurring-ical_events pyinstaller
+pip install fastapi uvicorn httpx pydantic icalendar recurring-ical_events holidays pyinstaller
 
 echo.
 echo Building Standalone EXE file

@@ -9,8 +9,12 @@ import httpx
 import asyncio
 import sqlite3
 import os
-import datetime
+
+from datetime import datetime, timedelta
 import calendar
+import holidays
+import zoneinfo
+
 import imaplib
 import email
 import email.header
@@ -26,6 +30,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "dashboard.db")
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+KST = zoneinfo.ZoneInfo("Asia/Seoul")
 
 DEFAULT_CONFIG = {
     "clock": {"font": "Pretendard", "color": "#00ff88", "separator": "colon", "notation": "24h"},
@@ -77,15 +83,18 @@ def init_db():
         except sqlite3.OperationalError: pass
         conn.commit()
 
-
 async def poll_chzzk():
     last_live_status = {}
     while True:
+        dynamic_sleep = 60
         try:
             with closing(sqlite3.connect(DB_PATH)) as conn:
                 c = conn.cursor()
                 c.execute("SELECT channel_id, name FROM channels WHERE platform='CHZZK' OR platform IS NULL")
                 channels = c.fetchall()
+                
+                dynamic_sleep = max(60, len(channels) * 2) 
+                
                 async with httpx.AsyncClient() as client:
                     for channel_id, name in channels:
                         url = f"https://api.chzzk.naver.com/polling/v2/channels/{channel_id}/live-status"
@@ -102,15 +111,19 @@ async def poll_chzzk():
                                     conn.commit()
                             last_live_status[channel_id] = current_status
         except: pass
-        await asyncio.sleep(60)
+        await asyncio.sleep(dynamic_sleep)
 
 async def poll_youtube():
     while True:
+        dynamic_sleep = 300
         try:
             with closing(sqlite3.connect(DB_PATH)) as conn:
                 c = conn.cursor()
                 c.execute("SELECT channel_id, name FROM channels WHERE platform='YOUTUBE'")
                 channels = c.fetchall()
+                
+                dynamic_sleep = max(300, len(channels) * 15)
+                
                 async with httpx.AsyncClient() as client:
                     for channel_id, name in channels:
                         url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
@@ -128,8 +141,9 @@ async def poll_youtube():
                                     msg = f"🔴 <b>{name}</b> 새 영상 업로드!<br><a href='https://youtu.be/{video_id}' target='_blank'>{title}</a><span style='display:none;'>{video_id}</span>"
                                     c.execute("INSERT INTO notifications (source, message) VALUES (?, ?)", ("YOUTUBE", msg))
                                     conn.commit()
+                        await asyncio.sleep(2)
         except Exception as e: print(f"[YouTube Error] {e}")
-        await asyncio.sleep(300)
+        await asyncio.sleep(dynamic_sleep)
 
 def _check_imap(user, pwd):
     try:
@@ -310,27 +324,71 @@ def safe_match(keyword, target):
     return k and (k in t)
 
 @app.get("/api/calendar")
-async def get_calendar_events():
-    cfg = load_config(); ical_url = cfg.get("calendar", {}).get("ical_url"); kw_map = cfg.get("calendar", {}).get("keywords", {})
-    now = datetime.datetime.now()
-    if not ical_url: return {"events": [], "current_month": now.month, "current_year": now.year}
-    try:
-        start_dt = datetime.date(now.year, now.month, 1); end_dt = start_dt + datetime.timedelta(days=45) 
-        async with httpx.AsyncClient() as client:
-            res = await client.get(ical_url); cal = icalendar.Calendar.from_ical(res.read())
-            events = recurring_ical_events.of(cal).between(start_dt, end_dt)
-            frontend_events = []
-            for ev in events:
-                summary = str(ev.get("SUMMARY", "제목 없음"))
-                dtstart = ev.get("DTSTART").dt
-                date_str = dtstart.isoformat() if hasattr(dtstart, 'isoformat') else str(dtstart)
-                color_id, matched = "1", False
-                for kw, cid in kw_map.items():
-                    if safe_match(kw, summary): color_id, matched = str(cid), True; break
-                if not matched: color_id = str((int(hashlib.md5(summary.encode('utf-8')).hexdigest(), 16) % 11) + 1)
-                frontend_events.append({"summary": summary, "start": {"dateTime": date_str}, "colorId": color_id})
-            return {"events": frontend_events, "current_month": now.month, "current_year": now.year}
-    except Exception as e: return {"events": [], "current_month": now.month, "current_year": now.year, "error": str(e)}
+async def get_calendar():
+    cfg = load_config()
+    ical_url = cfg.get("calendar", {}).get("ical_url")
+    kw_map = cfg.get("calendar", {}).get("keywords", {})
+    
+    now_kst = datetime.now(KST)
+    current_year = now_kst.year
+    current_month = now_kst.month
+    
+    kr_holidays = holidays.KR(years=[current_year, current_year + 1], language="ko")
+    
+    frontend_events = []
+    
+    for date, name in kr_holidays.items():
+        if date.month == current_month or date.month == (current_month % 12 + 1):
+            frontend_events.append({
+                "summary": name,
+                "start": {"date": date.strftime("%Y-%m-%d")},
+                "colorId": "11",
+                "is_holiday": True
+            })
+
+    if ical_url:
+        try:
+            start_dt = now_kst.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_dt = start_dt + timedelta(days=45) 
+            
+            async with httpx.AsyncClient() as client:
+                res = await client.get(ical_url)
+                cal = icalendar.Calendar.from_ical(res.read())
+                events = recurring_ical_events.of(cal).between(start_dt, end_dt)
+                
+                for ev in events:
+                    summary = str(ev.get("SUMMARY", "제목 없음"))
+                    raw_start = ev.get("DTSTART").dt
+                    
+                    if isinstance(raw_start, datetime):
+                        raw_start = raw_start.astimezone(KST) if raw_start.tzinfo else raw_start.replace(tzinfo=KST)
+                        date_str = raw_start.strftime("%Y-%m-%d")
+                    else:
+                        date_str = raw_start.strftime("%Y-%m-%d")
+                    
+                    if any(e['start']['date'] == date_str and e['summary'] == summary for e in frontend_events):
+                        continue
+
+                    color_id, matched = "1", False
+                    for kw, cid in kw_map.items():
+                        if safe_match(kw, summary): 
+                            color_id, matched = str(cid), True
+                            break
+                    if not matched: 
+                        color_id = str((int(hashlib.md5(summary.encode('utf-8')).hexdigest(), 16) % 11) + 1)
+                    
+                    is_holiday = "휴일" in summary or "날" in summary
+
+                    frontend_events.append({
+                        "summary": summary, 
+                        "start": {"date": date_str},
+                        "colorId": color_id,
+                        "is_holiday": is_holiday
+                    })
+        except Exception as e:
+            print(f"iCal 로드 에러: {e}")
+
+    return {"events": frontend_events, "current_month": current_month, "current_year": current_year}
 
 class WebhookData(BaseModel): source: str; message: str; border_color: Optional[str] = None; bg_color: Optional[str] = None     
 @app.post("/api/notify")

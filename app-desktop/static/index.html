@@ -46,8 +46,39 @@
         .cal-day-header { font-size: 0.75rem; color: #444; text-align: center; padding-bottom: 2px; font-weight: bold; }
         .cal-date { background: #181818; border-radius: 6px; padding: 4px; display: flex; flex-direction: column; font-size: 0.85rem; border: 1px solid #222; overflow: hidden; }
         .cal-date.today { border: 1px solid var(--clock-color); background: #12251d; }
-        .cal-date.next-month { background: #0a0a0a; border-color: #111; color: #555; }
-        .cal-date.next-month .event-tag { opacity: 0.25; filter: saturate(0.4) grayscale(0.2); }
+        .cal-date.next-month { 
+            background: #0a0a0a;
+            border-color: #111; 
+            color: #555;
+        }
+
+        .cal-date.next-month .holiday-label {
+            color: #ff4444;
+            opacity: 0.6;
+        }
+
+        .cal-date.next-month .event-tag { 
+            opacity: 0.25;
+            filter: saturate(0.4) grayscale(0.2);
+        }
+
+        .cal-date-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2px;
+        }
+
+        .holiday-label {
+            font-size: 0.65rem;
+            color: #ff4444;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 70%;
+        }
+
         .date-num { font-weight: bold; margin-bottom: 2px; }
         .event-tag { font-size: 0.68rem; color: #fff; padding: 1px 4px; border-radius: 3px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -68,7 +99,6 @@
         .setting-group label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 5px; }
         .setting-group input, .setting-group select { width: 100%; background: #111; border: 1px solid #444; color: #fff; padding: 8px; border-radius: 5px; box-sizing: border-box; }
         
-        /* 색상 선택기 전용 CSS 복구 */
         .setting-group input[type="color"] { padding: 0; height: 40px; cursor: pointer; background: transparent; border: none; }
         .setting-group input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
         .setting-group input[type="color"]::-webkit-color-swatch { border: 1px solid #444; border-radius: 5px; }
@@ -521,14 +551,31 @@
                 for(let d=1; d<=lastDate; d++) {
                     const today = new Date();
                     const isToday = today.getDate() === d && (today.getMonth()+1) === data.current_month && today.getFullYear() === data.current_year;
-                    const dayEvents = data.events.filter(ev => new Date(ev.start.dateTime || ev.start.date).getDate() === d);
                     
-                    let eventHtml = dayEvents.slice(0, 3).map(ev => {
+                    const targetDateStr = `${data.current_year}-${String(data.current_month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    const dayEvents = data.events.filter(ev => ev.start.date === targetDateStr);
+                    
+                    const holiday = dayEvents.find(ev => ev.is_holiday);
+                    const holidayHtml = holiday ? `<div class="holiday-label">${holiday.summary}</div>` : '';
+                    
+                    const normalEvents = dayEvents.filter(ev => ev !== holiday);
+                    let eventHtml = normalEvents.slice(0, 3).map(ev => {
                         const bgColor = CAL_COLORS[ev.colorId] || '#4285F4'; 
                         return `<div class="event-tag" style="background-color: ${bgColor};">${ev.summary}</div>`;
                     }).join('');
-                    if(dayEvents.length > 3) eventHtml += `<div style="font-size:0.6rem; color:#555; text-align:center;">+${dayEvents.length-3}</div>`;
-                    html += `<div class="cal-date ${isToday?'today':''}"><div class="date-num">${d}</div>${eventHtml}</div>`;
+                    
+                    if(normalEvents.length > 3) {
+                        eventHtml += `<div style="font-size:0.6rem; color:#555; text-align:center;">+${normalEvents.length-3}</div>`;
+                    }
+
+                    html += `
+                        <div class="cal-date ${isToday?'today':''}">
+                            <div class="cal-date-header">
+                                <div class="date-num">${d}</div>
+                                ${holidayHtml}
+                            </div>
+                            ${eventHtml}
+                        </div>`;
                 }
 
                 const totalCellsUsed = firstDay + lastDate;
@@ -538,19 +585,31 @@
                 if (nextMonth > 12) { nextMonth = 1; nextYear++; }
 
                 for(let i=1; i<=remainingCells; i++) {
-                    const dayEvents = data.events.filter(ev => {
-                        const evDate = new Date(ev.start.dateTime || ev.start.date);
-                        return evDate.getDate() === i && (evDate.getMonth() + 1) === nextMonth && evDate.getFullYear() === nextYear;
-                    });
-                    let eventHtml = dayEvents.slice(0, 3).map(ev => {
+                    const nextTargetStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                    const dayEvents = data.events.filter(ev => ev.start.date === nextTargetStr);
+                    
+                    const holiday = dayEvents.find(ev => ev.is_holiday);
+                    const holidayHtml = holiday ? `<div class="holiday-label">${holiday.summary}</div>` : '';
+                    
+                    const normalEvents = dayEvents.filter(ev => ev !== holiday);
+                    let eventHtml = normalEvents.slice(0, 2).map(ev => {
                         const bgColor = CAL_COLORS[ev.colorId] || '#4285F4'; 
                         return `<div class="event-tag" style="background-color: ${bgColor};">${ev.summary}</div>`;
                     }).join('');
-                    if(dayEvents.length > 3) eventHtml += `<div style="font-size:0.6rem; color:#555; text-align:center;">+${dayEvents.length-3}</div>`;
-                    html += `<div class="cal-date next-month"><div class="date-num">${i}</div>${eventHtml}</div>`;
+                    
+                    html += `
+                        <div class="cal-date next-month">
+                            <div class="cal-date-header">
+                                <div class="date-num">${i}</div>
+                                ${holidayHtml}
+                            </div>
+                            ${eventHtml}
+                        </div>`;
                 }
                 container.innerHTML = html;
-            } catch (e) {}
+            } catch (e) {
+                console.log("달력 로딩 에러:", e);
+            }
         }
         
         loadConfig().then(() => {

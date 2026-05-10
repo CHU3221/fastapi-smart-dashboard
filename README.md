@@ -93,8 +93,9 @@ cd backend
 podman build -t smart-dashboard .
 
 podman run -d \
-  -p 7600:7600 \
   --name dashboard \
+  -p 7600:7600 \
+  -v $(pwd)/src:/src:Z \
   smart-dashboard
 ````
 

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Smart Dashboard v3.1</title>
+    <title>Smart Dashboard v3.2</title>
     <style>
         :root {
             --clock-color: #00ff88;
@@ -53,7 +53,6 @@
         }
 
         .cal-date.next-month .holiday-label {
-            color: #ff4444;
             opacity: 0.6;
         }
 
@@ -71,7 +70,6 @@
 
         .holiday-label {
             font-size: 0.65rem;
-            color: #ff4444;
             font-weight: bold;
             white-space: nowrap;
             overflow: hidden;
@@ -312,8 +310,28 @@
             } else if (panel === 'calendar') {
                 title.innerText = "달력 & 키워드 색상 설정";
                 if(!currentConfig.calendar.keywords) currentConfig.calendar.keywords = {};
+                if(!currentConfig.calendar.ical_urls) currentConfig.calendar.ical_urls = [];
+                
                 body.innerHTML = `
-                    <div class="setting-group"><label>iCal 비공개 주소</label><input type="text" id="input-ical-url" value="${currentConfig.calendar.ical_url || ''}"></div>
+                    <div class="setting-group" style="display:flex; align-items:center; gap:10px; background:#111; padding:10px; border-radius:8px;">
+                        <input type="checkbox" id="check-use-holiday" style="width:auto;" ${currentConfig.calendar.use_holiday_cal ? 'checked' : ''}> 
+                        <label style="margin:0; font-size:0.9rem; font-weight:bold; color:#fff;">구글 공식 명절/기념일 달력 활성화</label>
+                    </div>
+                    <div class="setting-group" style="margin-bottom:20px;">
+                        <label>공식 명절 iCal 주소 (기본값 제공)</label>
+                        <input type="text" id="input-holiday-url" value="${currentConfig.calendar.holiday_ical_url || ''}">
+                    </div>
+
+                    <div style="background:#111; padding:10px; border-radius:8px; margin-bottom:15px;">
+                        <label style="font-size:0.85rem; color:#aaa; margin-bottom:5px; display:block;">새 개인 iCal 주소 추가</label>
+                        <div style="display:flex; gap:5px; margin-bottom:10px;">
+                            <input type="text" id="new-ical" placeholder="https://..." style="flex:1;">
+                            <button onclick="addUrl()" class="btn btn-save" style="padding:8px; width:60px;">추가</button>
+                        </div>
+                        <label style="font-size:0.85rem; color:#aaa; margin-bottom:5px; display:block;">등록된 개인 iCal 주소</label>
+                        <div id="url-list" style="max-height:80px; overflow-y:auto; border:1px solid #333; padding:5px; border-radius:5px;">로딩 중...</div>
+                    </div>
+
                     <div style="background:#111; padding:10px; border-radius:8px; margin-bottom:15px;">
                         <label style="font-size:0.85rem; color:#aaa; margin-bottom:5px; display:block;">새 키워드 추가</label>
                         <div style="display:flex; gap:5px; margin-bottom:10px;">
@@ -327,12 +345,42 @@
                     <label style="font-size:0.85rem; color:#aaa; margin-bottom:5px; display:block;">현재 키워드 규칙</label>
                     <div id="kw-list" style="margin-bottom:15px; max-height:150px; overflow-y:auto; border:1px solid #333; padding:5px; border-radius:5px;">로딩 중...</div>
                 `;
+                renderUrls();
                 renderCalKeywords();
             }
             document.getElementById('settings-modal').style.display = 'flex';
         }
 
         function closeModal() { document.getElementById('settings-modal').style.display = 'none'; }
+
+        function renderUrls() {
+            const list = document.getElementById('url-list'); 
+            const urls = currentConfig.calendar.ical_urls || [];
+            if(urls.length === 0) {
+                list.innerHTML = '<div style="color:#555; text-align:center; padding:5px;">등록된 주소가 없습니다.</div>';
+                return;
+            }
+            list.innerHTML = urls.map((u, i) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#1a1a1a; padding:5px 8px; margin-bottom:4px; border-radius:4px; font-size:0.75rem;">
+                    <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:80%;" title="${u}">${u}</span>
+                    <button onclick="delUrl(${i})" style="background:#ff4444; border:none; color:white; border-radius:3px; cursor:pointer; font-size:0.7rem; padding:3px 6px;">삭제</button>
+                </div>`).join('');
+        }
+
+        function addUrl() { 
+            const v = document.getElementById('new-ical').value.trim(); 
+            if(v) { 
+                if(!currentConfig.calendar.ical_urls) currentConfig.calendar.ical_urls = [];
+                currentConfig.calendar.ical_urls.push(v); 
+                document.getElementById('new-ical').value = '';
+                renderUrls(); 
+            } 
+        }
+
+        function delUrl(i) { 
+            currentConfig.calendar.ical_urls.splice(i, 1); 
+            renderUrls(); 
+        }
 
         async function saveSettings() {
             if (currentEditingPanel === 'clock') {
@@ -347,7 +395,8 @@
                 currentConfig.weather.city = document.getElementById('input-weather-city').value;
             }
             if (currentEditingPanel === 'calendar') {
-                currentConfig.calendar.ical_url = document.getElementById('input-ical-url').value;
+                currentConfig.calendar.use_holiday_cal = document.getElementById('check-use-holiday').checked;
+                currentConfig.calendar.holiday_ical_url = document.getElementById('input-holiday-url').value;
             }
             if (currentEditingPanel === 'notifications') {
                 currentConfig.notifications.colors.CHZZK = document.getElementById('input-color-chzzk').value;
@@ -441,44 +490,44 @@
         }
 
         function updateClock() {
-    const now = new Date();
-    let h = now.getHours();
-    const m = String(now.getMinutes()).padStart(2, '0');
-    const s = String(now.getSeconds()).padStart(2, '0');
-    
+            const now = new Date();
+            let h = now.getHours();
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            
 
-    const notation = currentConfig.clock?.notation || '24h';
-    const separator = currentConfig.clock?.separator || 'colon';
-    const ampmPos = currentConfig.clock?.ampm_position || 'before'; 
-    
-    let ampmHtml = '';
+            const notation = currentConfig.clock?.notation || '24h';
+            const separator = currentConfig.clock?.separator || 'colon';
+            const ampmPos = currentConfig.clock?.ampm_position || 'before'; 
+            
+            let ampmHtml = '';
 
-    if (notation !== '24h') {
-        const isPM = h >= 12;
-        let ampmText = '';
-        if (notation === '12h_en') ampmText = isPM ? 'PM' : 'AM';
-        if (notation === '12h_ko') ampmText = isPM ? '오후' : '오전';
-        
-        ampmHtml = `<span style="font-size: 0.5em; vertical-align: baseline; margin: 0 4px;">${ampmText}</span>`;
-        
-        h = h % 12; 
-        if (h === 0) h = 12;
-    }
+            if (notation !== '24h') {
+                const isPM = h >= 12;
+                let ampmText = '';
+                if (notation === '12h_en') ampmText = isPM ? 'PM' : 'AM';
+                if (notation === '12h_ko') ampmText = isPM ? '오후' : '오전';
+                
+                ampmHtml = `<span style="font-size: 0.5em; vertical-align: baseline; margin: 0 4px;">${ampmText}</span>`;
+                
+                h = h % 12; 
+                if (h === 0) h = 12;
+            }
 
-    h = String(h).padStart(2, '0'); 
+            h = String(h).padStart(2, '0'); 
 
-    let baseTime = (separator === 'korean') ? `${h}시 ${m}분 ${s}초` : `${h}:${m}:${s}`;
+            let baseTime = (separator === 'korean') ? `${h}시 ${m}분 ${s}초` : `${h}:${m}:${s}`;
 
-    let timeString = '';
-    if (notation !== '24h') {
-        timeString = (ampmPos === 'before') ? `${ampmHtml}${baseTime}` : `${baseTime}${ampmHtml}`;
-    } else {
-        timeString = baseTime;
-    }
+            let timeString = '';
+            if (notation !== '24h') {
+                timeString = (ampmPos === 'before') ? `${ampmHtml}${baseTime}` : `${baseTime}${ampmHtml}`;
+            } else {
+                timeString = baseTime;
+            }
 
-    document.getElementById('clock').innerHTML = timeString;
-    document.getElementById('date').innerText = now.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'short'});
-}
+            document.getElementById('clock').innerHTML = timeString;
+            document.getElementById('date').innerText = now.toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric', weekday:'short'});
+        }
 
         async function fetchWeather() {
             try {
@@ -556,7 +605,11 @@
                     const dayEvents = data.events.filter(ev => ev.start.date === targetDateStr);
                     
                     const holiday = dayEvents.find(ev => ev.is_holiday);
-                    const holidayHtml = holiday ? `<div class="holiday-label">${holiday.summary}</div>` : '';
+                    let holidayHtml = '';
+                    if (holiday) {
+                        const labelColor = holiday.is_red_day ? '#ff4444' : '#dddddd';
+                        holidayHtml = `<div class="holiday-label" style="color: ${labelColor};">${holiday.summary}</div>`;
+                    }
                     
                     const normalEvents = dayEvents.filter(ev => ev !== holiday);
                     let eventHtml = normalEvents.slice(0, 3).map(ev => {
@@ -589,7 +642,11 @@
                     const dayEvents = data.events.filter(ev => ev.start.date === nextTargetStr);
                     
                     const holiday = dayEvents.find(ev => ev.is_holiday);
-                    const holidayHtml = holiday ? `<div class="holiday-label">${holiday.summary}</div>` : '';
+                    let holidayHtml = '';
+                    if (holiday) {
+                        const labelColor = holiday.is_red_day ? '#ff4444' : '#dddddd';
+                        holidayHtml = `<div class="holiday-label" style="color: ${labelColor};">${holiday.summary}</div>`;
+                    }
                     
                     const normalEvents = dayEvents.filter(ev => ev !== holiday);
                     let eventHtml = normalEvents.slice(0, 2).map(ev => {

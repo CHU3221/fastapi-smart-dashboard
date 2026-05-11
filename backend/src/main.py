@@ -38,7 +38,12 @@ DEFAULT_CONFIG = {
     "weather": {"city": "Pohang", "font": "Pretendard", "color": "#ffffff", "api_key": ""},
     "notifications": {"colors": {"CHZZK": "#00ff88", "YOUTUBE": "#ff0000", "GMAIL": "#ea4335", "SYSTEM": "#aaaaaa"}},
     "gmail": {"email": "", "app_password": ""},
-    "calendar": {"ical_url": "", "keywords": {}}
+    "calendar": {
+        "use_holiday_cal": True,
+        "holiday_ical_url": "https://calendar.google.com/calendar/ical/ko.south_korea%23holiday%40group.v.calendar.google.com/public/basic.ics",
+        "ical_urls": [],
+        "keywords": {}
+    }
 }
 
 def load_config():
@@ -326,34 +331,36 @@ def safe_match(keyword, target):
 @app.get("/api/calendar")
 async def get_calendar():
     cfg = load_config()
-    ical_url = cfg.get("calendar", {}).get("ical_url")
-    kw_map = cfg.get("calendar", {}).get("keywords", {})
+    cal_cfg = cfg.get("calendar", {})
+    use_holiday = cal_cfg.get("use_holiday_cal", True)
+    holiday_url = cal_cfg.get("holiday_ical_url", "")
+    ical_urls = cal_cfg.get("ical_urls", [])
+    kw_map = cal_cfg.get("keywords", {})
     
     now_kst = datetime.now(KST)
     current_year = now_kst.year
     current_month = now_kst.month
     
-    kr_holidays = holidays.KR(years=[current_year, current_year + 1], language="ko")
+    # 공휴일 판독기 (빨간색 칠할지 결정하는 용도)
+    kr_holidays = holidays.KR(years=[current_year, current_year + 1])
     
     frontend_events = []
+    target_urls = []
     
-    for date, name in kr_holidays.items():
-        if date.month == current_month or date.month == (current_month % 12 + 1):
-            frontend_events.append({
-                "summary": name,
-                "start": {"date": date.strftime("%Y-%m-%d")},
-                "colorId": "11",
-                "is_holiday": True
-            })
+    if use_holiday and holiday_url: 
+        target_urls.append(holiday_url)
+    target_urls.extend(ical_urls)
 
-    if ical_url:
-        try:
-            start_dt = now_kst.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            end_dt = start_dt + timedelta(days=45) 
-            
-            async with httpx.AsyncClient() as client:
-                res = await client.get(ical_url)
+    async with httpx.AsyncClient() as client:
+        for url in target_urls:
+            if not url or not url.startswith("http"): continue
+            try:
+                res = await client.get(url, timeout=5.0)
+                if res.status_code != 200: continue
+                
                 cal = icalendar.Calendar.from_ical(res.read())
+                start_dt = now_kst.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                end_dt = start_dt + timedelta(days=45) 
                 events = recurring_ical_events.of(cal).between(start_dt, end_dt)
                 
                 for ev in events:
@@ -363,11 +370,16 @@ async def get_calendar():
                     if isinstance(raw_start, datetime):
                         raw_start = raw_start.astimezone(KST) if raw_start.tzinfo else raw_start.replace(tzinfo=KST)
                         date_str = raw_start.strftime("%Y-%m-%d")
+                        dt_date = raw_start.date()
                     else:
                         date_str = raw_start.strftime("%Y-%m-%d")
+                        dt_date = raw_start
                     
                     if any(e['start']['date'] == date_str and e['summary'] == summary for e in frontend_events):
                         continue
+
+                    is_red_day = dt_date in kr_holidays
+                    is_special = is_red_day or any(word in summary for word in ["날", "절", "기념일", "휴일", "명절"])
 
                     color_id, matched = "1", False
                     for kw, cid in kw_map.items():
@@ -376,17 +388,16 @@ async def get_calendar():
                             break
                     if not matched: 
                         color_id = str((int(hashlib.md5(summary.encode('utf-8')).hexdigest(), 16) % 11) + 1)
-                    
-                    is_holiday = "휴일" in summary or "날" in summary
 
                     frontend_events.append({
                         "summary": summary, 
                         "start": {"date": date_str},
                         "colorId": color_id,
-                        "is_holiday": is_holiday
+                        "is_holiday": is_special,
+                        "is_red_day": is_red_day
                     })
-        except Exception as e:
-            print(f"iCal 로드 에러: {e}")
+            except Exception as e:
+                print(f"iCal 로드 에러 ({url}): {e}")
 
     return {"events": frontend_events, "current_month": current_month, "current_year": current_year}
 
